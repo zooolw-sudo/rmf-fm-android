@@ -1,0 +1,39 @@
+name: Build RMF FM APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pobierz kod z repozytorium
+        uses: actions/checkout@v4
+
+      - name: Zainstaluj Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Skonfiguruj Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Skonfiguruj Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Zbuduj plik APK
+        run: |
+          echo "android.useAndroidX=true" > gradle.properties
+          gradle assembleDebug --no-daemon
+
+      - name: Udostępnij gotowy plik APK do pobrania
+        uses: actions/upload-artifact@v4
+        with:
+          name: RMF-FM-Radio-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
