@@ -10,29 +10,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Pobierz kod z repozytorium
+      - name: Pobierz kod repozytorium
         uses: actions/checkout@v4
 
-      - name: Zainstaluj Java JDK 17
-        uses: actions/setup-java@v4
+      - name: Ustawienie Java JDK 17
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Skonfiguruj Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Przygotowanie licencji i środowiska Android
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          echo "android.useAndroidX=true" > gradle.properties
 
-      - name: Skonfiguruj Gradle
+      - name: Instalacja Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
       - name: Zbuduj plik APK
-        run: |
-          echo "android.useAndroidX=true" > gradle.properties
-          gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Udostępnij gotowy plik APK do pobrania
+      - name: Udostępnij plik APK do pobrania
         uses: actions/upload-artifact@v4
         with:
           name: RMF-FM-Radio-APK
