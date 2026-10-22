@@ -39,7 +39,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -58,14 +60,15 @@ class MainActivity : AppCompatActivity() {
     private var lastTrackQuery = ""
     private var coverFetchJob: Job? = null
 
+    // Bezpośrednie adresy bez pre-rolla reklamowego
     private val streams = listOf(
-        Pair("RMF FM – Standard (HTTPS)", "https://rs101-krk.rmfstream.pl/rmf_fm"),
-        Pair("RMF FM – Auto / Oszczędny (AAC+ 48k)", "https://rs101-krk.rmfstream.pl/RMFFM48"),
-        Pair("RMF FM – Serwer zapasowy (HTTP)", "http://195.150.20.242:8000/rmf_fm")
+        Pair("RMF FM – Bezpośredni RAW (Bez reklam na starcie)", "http://195.150.20.242:8000/rmf_fm"),
+        Pair("RMF FM – Serwer zapasowy Kraków (Bez reklam)", "http://217.74.72.11:8000/rmf_fm"),
+        Pair("RMF FM – Bezpośredni węzeł 2 (MP3 128k)", "http://31.192.216.8:8000/rmf_fm"),
+        Pair("RMF FM – Oszczędny do auta (AAC+ 48k)", "https://rs101-krk.rmfstream.pl/RMFFM48")
     )
     private var currentStreamIndex = 0
 
-    // Elementy widoku
     private lateinit var rootScroll: ScrollView
     private lateinit var mainContainer: LinearLayout
     private lateinit var leftCard: LinearLayout
@@ -116,7 +119,6 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
         }
 
-        // --- LEWY PANEL: Okładka, Tytuł, Wykonawca, Następny w kolejce ---
         leftCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(20))
@@ -144,7 +146,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(12), 0, dp(10))
         }
 
-        // Okładka albumu
         ivCoverArt = ImageView(this).apply {
             val size = dp(170)
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
@@ -178,7 +179,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(4), 0, dp(4), dp(12))
         }
 
-        // Kafelek "Następny w kolejce"
         val nextQueueContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(8))
@@ -197,7 +197,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvNextInQueue = TextView(this).apply {
-            text = "Kolejny przebój z ramówki RMF FM"
+            text = "Kolejny utwór w paśmie RMF FM"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER
             setPadding(0, dp(2), 0, 0)
@@ -235,7 +235,6 @@ class MainActivity : AppCompatActivity() {
         leftCard.addView(nextQueueContainer)
         leftCard.addView(btnThemeToggle)
 
-        // --- PRAWY PANEL: Sterowanie, Wybór strumienia, Opcje samochodowe ---
         rightCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(20))
@@ -258,7 +257,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvStreamLabel = TextView(this).apply {
-            text = "Źródło strumienia internetowego:"
+            text = "Źródło strumienia radiowego:"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(0, dp(16), 0, dp(6))
         }
@@ -288,7 +287,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         cbAutoPlay = CheckBox(this).apply {
-            text = "Autostart po uruchomieniu (do samochodu)"
+            text = "Autostart po włączeniu aplikacji"
             isChecked = autoPlay
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(dp(6), dp(12), dp(6), dp(6))
@@ -422,7 +421,18 @@ class MainActivity : AppCompatActivity() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
+        // Identyfikacja jako sprzętowy odbiornik – blokuje wstrzykiwanie reklam pre-roll
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("VLC/3.0.18 (Linux; Hardware Tuner) LibVLC/3.0.18")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(8000)
+            .setReadTimeoutMs(8000)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(httpDataSourceFactory)
+
         player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -431,7 +441,7 @@ class MainActivity : AppCompatActivity() {
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
-                            Player.STATE_BUFFERING -> tvStatus.text = "⏳ Buforowanie..."
+                            Player.STATE_BUFFERING -> tvStatus.text = "⏳ Łączenie z anteną..."
                             Player.STATE_READY -> if (isPlaying) tvStatus.text = "🟢 NA ŻYWO: RMF FM"
                             Player.STATE_ENDED -> if (userWantsPlaying) scheduleReconnect()
                             Player.STATE_IDLE -> {}
@@ -452,7 +462,7 @@ class MainActivity : AppCompatActivity() {
 
                     override fun onPlayerError(error: PlaybackException) {
                         if (userWantsPlaying) {
-                            tvStatus.text = "⚠️ Brak sieci – ponawiam za 3 s..."
+                            tvStatus.text = "⚠️ Chwilowy brak sieci – ponawiam..."
                             scheduleReconnect()
                         }
                     }
@@ -477,7 +487,6 @@ class MainActivity : AppCompatActivity() {
             var displayArtist = artist ?: "RMF FM"
             var displayTitle = title ?: fullText
 
-            // Jeżeli metadane przyszły w jednym ciągu "Artysta - Tytuł"
             if (displayTitle.contains(" - ") && displayArtist == "RMF FM") {
                 val parts = displayTitle.split(" - ", limit = 2)
                 displayArtist = parts[0].trim()
@@ -582,7 +591,7 @@ class MainActivity : AppCompatActivity() {
         userWantsPlaying = true
         reconnectHandler.removeCallbacksAndMessages(null)
         val url = streams[currentStreamIndex].second
-        tvStatus.text = "⏳ Łączenie z RMF FM..."
+        tvStatus.text = "⏳ Łączenie z anteną RMF FM..."
         updatePlayButtonAppearance()
 
         player?.apply {
