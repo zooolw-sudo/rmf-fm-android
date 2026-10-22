@@ -60,12 +60,12 @@ class MainActivity : AppCompatActivity() {
     private var lastTrackQuery = ""
     private var coverFetchJob: Job? = null
 
-    // Bezpośrednie adresy bez pre-rolla reklamowego
+    // Oficjalne i stabilne węzły transmisyjne Cyfronet Kraków
     private val streams = listOf(
-        Pair("RMF FM – Bezpośredni RAW (Bez reklam na starcie)", "http://195.150.20.242:8000/rmf_fm"),
-        Pair("RMF FM – Serwer zapasowy Kraków (Bez reklam)", "http://217.74.72.11:8000/rmf_fm"),
-        Pair("RMF FM – Bezpośredni węzeł 2 (MP3 128k)", "http://31.192.216.8:8000/rmf_fm"),
-        Pair("RMF FM – Oszczędny do auta (AAC+ 48k)", "https://rs101-krk.rmfstream.pl/RMFFM48")
+        Pair("RMF FM – Główny (Cyfronet HQ)", "https://rs101-krk-cyfronet.rmfstream.pl/rmf_fm"),
+        Pair("RMF FM – Samochodowy (AAC+ stabilny w trasie)", "https://rs101-krk-cyfronet.rmfstream.pl/RMFFM48"),
+        Pair("RMF FM – Węzeł zapasowy 1", "https://rs101-krk.rmfstream.pl/rmf_fm"),
+        Pair("RMF FM – Węzeł zapasowy 2", "http://195.150.20.7/rmf_fm")
     )
     private var currentStreamIndex = 0
 
@@ -257,7 +257,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvStreamLabel = TextView(this).apply {
-            text = "Źródło strumienia radiowego:"
+            text = "Wybór serwera transmisji:"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(0, dp(16), 0, dp(6))
         }
@@ -287,7 +287,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         cbAutoPlay = CheckBox(this).apply {
-            text = "Autostart po włączeniu aplikacji"
+            text = "Autostart po włączeniu (do samochodu)"
             isChecked = autoPlay
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(dp(6), dp(12), dp(6), dp(6))
@@ -300,7 +300,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         cbKeepScreenOn = CheckBox(this).apply {
-            text = "Nie wygaszaj ekranu podczas jazdy"
+            text = "Nie wygaszaj ekranu w aucie"
             isChecked = keepScreenOn
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(dp(6), dp(6), dp(6), dp(6))
@@ -421,12 +421,11 @@ class MainActivity : AppCompatActivity() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
-        // Identyfikacja jako sprzętowy odbiornik – blokuje wstrzykiwanie reklam pre-roll
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VLC/3.0.18 (Linux; Hardware Tuner) LibVLC/3.0.18")
+            .setUserAgent("RadioReceiver/1.0 (Android; AutoPlayer)")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(8000)
-            .setReadTimeoutMs(8000)
+            .setConnectTimeoutMs(10000)
+            .setReadTimeoutMs(10000)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
             .setDataSourceFactory(httpDataSourceFactory)
@@ -441,9 +440,10 @@ class MainActivity : AppCompatActivity() {
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
-                            Player.STATE_BUFFERING -> tvStatus.text = "⏳ Łączenie z anteną..."
+                            Player.STATE_BUFFERING -> tvStatus.text = "⏳ Buforowanie..."
                             Player.STATE_READY -> if (isPlaying) tvStatus.text = "🟢 NA ŻYWO: RMF FM"
-                            Player.STATE_ENDED -> if (userWantsPlaying) scheduleReconnect()
+                            // WAŻNE: Nie restartujemy przy STATE_ENDED – zapobiega zapętleniu reklam
+                            Player.STATE_ENDED -> {}
                             Player.STATE_IDLE -> {}
                         }
                         updatePlayButtonAppearance()
@@ -621,7 +621,7 @@ class MainActivity : AppCompatActivity() {
             if (userWantsPlaying) {
                 startRadio()
             }
-        }, 3000)
+        }, 4000)
     }
 
     private fun updateKeepScreenOn(enable: Boolean) {
